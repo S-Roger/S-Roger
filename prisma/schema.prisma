@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum LicenseStatus {
+  ACTIVE
+  REVOKED
+  EXHAUSTED
+}
+
+enum ItemType {
+  WORD
+  PHRASE
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  role          Role      @default(MEMBER)
+  isActive      Boolean   @default(true)
+  licenseId     String?
+  license       License?  @relation(fields: [licenseId], references: [id])
+  licenseExpiresAt DateTime?
+  createdAt     DateTime  @default(now())
+
+  progress      Progress[]
+  studySessions StudySession[]
+  createdLicenses License[] @relation("LicenseCreatedBy")
+  createdDecks    Deck[]    @relation("DeckCreatedBy")
+}
+
+model License {
+  id               String        @id @default(cuid())
+  code             String        @unique
+  durationDays     Int
+  maxActivations   Int           @default(1)
+  activationsUsed  Int           @default(0)
+  status           LicenseStatus @default(ACTIVE)
+  note             String?
+  createdAt        DateTime      @default(now())
+  createdById      String?
+  createdBy        User?         @relation("LicenseCreatedBy", fields: [createdById], references: [id])
+  users            User[]
+}
+
+model Language {
+  id      String  @id @default(cuid())
+  code    String  @unique
+  name    String
+  flag    String?
+  decks   Deck[]
+}
+
+model Deck {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  level         String   @default("A1")
+  languageId    String
+  language      Language @relation(fields: [languageId], references: [id])
+  isAiGenerated Boolean  @default(false)
+  createdById   String?
+  createdBy     User?    @relation("DeckCreatedBy", fields: [createdById], references: [id])
+  createdAt     DateTime @default(now())
+
+  items         VocabItem[]
+  studySessions StudySession[]
+}
+
+model VocabItem {
+  id         String   @id @default(cuid())
+  deckId     String
+  deck       Deck     @relation(fields: [deckId], references: [id], onDelete: Cascade)
+  type       ItemType @default(WORD)
+  term       String
+  translation String
+  example    String?
+  createdAt  DateTime @default(now())
+
+  progress   Progress[]
+}
+
+model Progress {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabItemId   String
+  vocabItem     VocabItem @relation(fields: [vocabItemId], references: [id], onDelete: Cascade)
+  box           Int       @default(1)
+  correctCount  Int       @default(0)
+  wrongCount    Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime?
+
+  @@unique([userId, vocabItemId])
+}
+
+model StudySession {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deckId            String?
+  deck              Deck?    @relation(fields: [deckId], references: [id])
+  plannedSeconds    Int
+  actualSeconds     Int?
+  itemsReviewed     Int      @default(0)
+  correctCount      Int      @default(0)
+  wrongCount        Int      @default(0)
+  startedAt         DateTime @default(now())
+  endedAt           DateTime?
+}
+
+model Settings {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+}
